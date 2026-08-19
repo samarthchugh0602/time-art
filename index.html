@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Generative Clock</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #030508;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+
+/* =========================
+   TOP LEFT
+========================= */
+
+.brand {
+    position: fixed;
+    top: 24px;
+    left: 26px;
+
+    color: rgba(255,255,255,.28);
+
+    font-size: 10px;
+    line-height: 1.8;
+    letter-spacing: 3px;
+
+    pointer-events: none;
+    user-select: none;
+}
+
+.brand b {
+    color: rgba(255,255,255,.8);
+    font-weight: 600;
+}
+
+
+/* =========================
+   TOP RIGHT
+========================= */
+
+.controls {
+    position: fixed;
+
+    top: 20px;
+    right: 22px;
+
+    display: flex;
+    align-items: center;
+    gap: 9px;
+
+    padding: 8px 10px;
+
+    border-radius: 9px;
+
+    border: 1px solid rgba(255,255,255,.08);
+
+    background: rgba(255,255,255,.045);
+
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.controls span {
+    color: rgba(255,255,255,.36);
+
+    font-size: 9px;
+    letter-spacing: 2px;
+}
+
+select {
+    appearance: none;
+
+    border: 1px solid rgba(255,255,255,.08);
+
+    outline: none;
+
+    padding: 6px 10px;
+
+    border-radius: 6px;
+
+    color: rgba(255,255,255,.9);
+
+    background: #11151b;
+
+    font-size: 10px;
+
+    letter-spacing: 1px;
+
+    cursor: pointer;
+}
+
+select option {
+    background: #11151b;
+    color: white;
+}
+
+
+/* =========================
+   STATUS
+========================= */
+
+.status {
+    position: fixed;
+
+    left: 26px;
+    bottom: 22px;
+
+    color: rgba(255,255,255,.16);
+
+    font-size: 9px;
+    letter-spacing: 2px;
+
+    pointer-events: none;
+    user-select: none;
+}
+
+.status::before {
+    content: "";
+
+    display: inline-block;
+
+    width: 5px;
+    height: 5px;
+
+    margin-right: 8px;
+
+    border-radius: 50%;
+
+    background: #9fffe0;
+
+    box-shadow:
+        0 0 9px #9fffe0;
+}
+</style>
+</head>
+
+
+<body>
+
+<canvas id="canvas"></canvas>
+
+
+<div class="brand">
+    GENERATIVE CLOCK<br>
+    <b>PARTICLE SYNTHESIS // LIVE</b>
+</div>
+
+
+<div class="controls">
+    <span>COLOR</span>
+
+    <select id="colorSelect">
+
+        <option value="mint">MINT</option>
+        <option value="cyan">CYAN</option>
+        <option value="blue">BLUE</option>
+        <option value="purple">PURPLE</option>
+        <option value="pink">PINK</option>
+        <option value="orange">ORANGE</option>
+        <option value="red">RED</option>
+        <option value="white">WHITE</option>
+
+    </select>
+</div>
+
+
+<div class="status">
+    REAL-TIME PARTICLE SYSTEM
+</div>
+
+
+<script>
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+const canvas =
+    document.getElementById("canvas");
+
+const ctx =
+    canvas.getContext("2d");
+
+let W = 0;
+let H = 0;
+let DPR = 1;
+
+
+/* =========================================================
+   COLORS
+========================================================= */
+
+const COLORS = {
+
+    mint: {
+        main: [155, 255, 225],
+        glow: [70, 255, 205]
+    },
+
+    cyan: {
+        main: [100, 225, 255],
+        glow: [30, 190, 255]
+    },
+
+    blue: {
+        main: [125, 165, 255],
+        glow: [70, 105, 255]
+    },
+
+    purple: {
+        main: [205, 145, 255],
+        glow: [150, 70, 255]
+    },
+
+    pink: {
+        main: [255, 140, 210],
+        glow: [255, 65, 175]
+    },
+
+    orange: {
+        main: [255, 195, 110],
+        glow: [255, 125, 35]
+    },
+
+    red: {
+        main: [255, 110, 115],
+        glow: [255, 45, 50]
+    },
+
+    white: {
+        main: [240, 245, 255],
+        glow: [190, 210, 255]
+    }
+};
+
+let activeColor =
+    COLORS.mint;
+
+
+document
+    .getElementById("colorSelect")
+    .addEventListener("change", function () {
+
+        activeColor =
+            COLORS[this.value];
+
+    });
+
+
+/* =========================================================
+   SEVEN SEGMENT DEFINITIONS
+=========================================================
+
+             AAAAA
+
+           F       B
+           F       B
+
+             GGGGG
+
+           E       C
+           E       C
+
+             DDDDD
+
+========================================================= */
+
+const DIGITS = {
+
+    "0": ["A","B","C","D","E","F"],
+
+    "1": ["B","C"],
+
+    "2": ["A","B","G","E","D"],
+
+    "3": ["A","B","G","C","D"],
+
+    "4": ["F","G","B","C"],
+
+    "5": ["A","F","G","C","D"],
+
+    "6": ["A","F","G","E","C","D"],
+
+    "7": ["A","B","C"],
+
+    "8": ["A","B","C","D","E","F","G"],
+
+    "9": ["A","B","C","D","F","G"]
+};
+
+
+/* =========================================================
+   PARTICLE SETTINGS
+========================================================= */
+
+/*
+    More particles on each segment.
+
+    This fixes the broken-looking 0/6/8/9.
+*/
+
+const PARTICLES_PER_SEGMENT = 20;
+
+
+/*
+    Small dots.
+*/
+
+const DOT_SIZE = 1.15;
+
+
+/*
+    Faint line connecting the particle chain.
+
+    It makes the digits readable even when
+    individual particles have tiny gaps.
+*/
+
+const LINE_ALPHA = 0.18;
+
+
+/*
+    Transition strength.
+*/
+
+const BURST_MIN = 1.0;
+const BURST_MAX = 2.2;
+
+
+/* =========================================================
+   PARTICLE
+========================================================= */
+
+class Particle {
+
+    constructor(x, y) {
+
+        this.x = x;
+        this.y = y;
+
+        this.tx = x;
+        this.ty = y;
+
+        this.vx = 0;
+        this.vy = 0;
+
+        this.phase =
+            Math.random() *
+            Math.PI *
+            2;
+
+        this.morph = 0;
+    }
+
+
+    setTarget(x, y, animate) {
+
+        this.tx = x;
+        this.ty = y;
+
+
+        if (!animate) {
+
+            this.x = x;
+            this.y = y;
+
+            this.vx = 0;
+            this.vy = 0;
+
+            this.morph = 0;
+
+            return;
+        }
+
+
+        const angle =
+            Math.random() *
+            Math.PI * 2;
+
+        const force =
+            BURST_MIN +
+            Math.random() *
+            (
+                BURST_MAX -
+                BURST_MIN
+            );
+
+
+        this.vx =
+            Math.cos(angle) *
+            force;
+
+        this.vy =
+            Math.sin(angle) *
+            force;
+
+        this.morph = 1;
+    }
+
+
+    update() {
+
+        const dx =
+            this.tx - this.x;
+
+        const dy =
+            this.ty - this.y;
+
+
+        /*
+            Spring.
+        */
+
+        this.vx +=
+            dx * 0.075;
+
+        this.vy +=
+            dy * 0.075;
+
+
+        /*
+            Damping.
+        */
+
+        this.vx *= 0.60;
+        this.vy *= 0.60;
+
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+
+        if (this.morph > 0) {
+
+            this.morph -= 0.04;
+
+            if (this.morph < 0) {
+                this.morph = 0;
+            }
+        }
+    }
+}
+
+
+/* =========================================================
+   CLOCK GROUPS
+=========================================================
+
+       0 1 2 3 4 5 6 7
+
+       H H : M M : S S
+
+   Every character has its own particle group.
+
+========================================================= */
+
+let groups = [];
+
+
+/* =========================================================
+   RESPONSIVE LAYOUT
+========================================================= */
+
+function getLayout() {
+
+    /*
+        We calculate the size from WIDTH.
+
+        This is the important part that stops
+        the clock from going off-screen.
+    */
+
+
+    /*
+        Reserve some breathing room on each side.
+    */
+
+    const usableWidth =
+        Math.max(
+            300,
+            W - 120
+        );
+
+
+    /*
+        The composition is approximately:
+
+        6 digits × 5 units
+        2 colons × 1 unit
+        7 gaps × 1.4 units
+
+        = 47.8 units
+    */
+
+    const widthScale =
+        usableWidth / 47.8;
+
+
+    /*
+        Also constrain by HEIGHT.
+    */
+
+    const heightScale =
+        (H * 0.46) / 7;
+
+
+    const scale =
+        Math.min(
+            widthScale,
+            heightScale
+        );
+
+
+    /*
+        Prevent ridiculously tiny clocks
+        on unusual windows.
+    */
+
+    const finalScale =
+        Math.max(
+            12,
+            scale
+        );
+
+
+    const digitWidth =
+        finalScale * 5;
+
+    const digitHeight =
+        finalScale * 7;
+
+
+    const gap =
+        finalScale * 1.4;
+
+
+    const colonWidth =
+        finalScale;
+
+
+    /*
+        Calculate exact total width.
+    */
+
+    const totalWidth =
+        digitWidth * 6
+        +
+        colonWidth * 2
+        +
+        gap * 7;
+
+
+    return {
+
+        scale: finalScale,
+
+        digitWidth,
+        digitHeight,
+
+        gap,
+        colonWidth,
+
+        totalWidth,
+
+        startX:
+            (W - totalWidth) / 2,
+
+        startY:
+            (H - digitHeight) / 2
+    };
+}
+
+
+/* =========================================================
+   CHARACTER X
+========================================================= */
+
+function getCharacterX(
+    index,
+    layout
+) {
+
+    let x =
+        layout.startX;
+
+
+    for (
+        let i = 0;
+        i < index;
+        i++
+    ) {
+
+        if (
+            i === 2 ||
+            i === 5
+        ) {
+
+            x +=
+                layout.colonWidth;
+
+        } else {
+
+            x +=
+                layout.digitWidth;
+        }
+
+
+        x +=
+            layout.gap;
+    }
+
+
+    return x;
+}
+
+
+/* =========================================================
+   SEGMENT GEOMETRY
+========================================================= */
+
+function getSegment(
+    name,
+    x,
+    layout
+) {
+
+    const w =
+        layout.digitWidth;
+
+    const h =
+        layout.digitHeight;
+
+
+    /*
+        Inset makes the shape cleaner.
+    */
+
+    const inset =
+        w * 0.13;
+
+
+    const left =
+        x + inset;
+
+    const right =
+        x + w - inset;
+
+
+    const top =
+        layout.startY +
+        inset * 0.45;
+
+    const middle =
+        layout.startY +
+        h / 2;
+
+    const bottom =
+        layout.startY +
+        h -
+        inset * 0.45;
+
+
+    switch (name) {
+
+        case "A":
+            return {
+                x1: left,
+                y1: top,
+                x2: right,
+                y2: top
+            };
+
+        case "B":
+            return {
+                x1: right,
+                y1: top,
+                x2: right,
+                y2: middle
+            };
+
+        case "C":
+            return {
+                x1: right,
+                y1: middle,
+                x2: right,
+                y2: bottom
+            };
+
+        case "D":
+            return {
+                x1: left,
+                y1: bottom,
+                x2: right,
+                y2: bottom
+            };
+
+        case "E":
+            return {
+                x1: left,
+                y1: middle,
+                x2: left,
+                y2: bottom
+            };
+
+        case "F":
+            return {
+                x1: left,
+                y1: top,
+                x2: left,
+                y2: middle
+            };
+
+        case "G":
+            return {
+                x1: left,
+                y1: middle,
+                x2: right,
+                y2: middle
+            };
+    }
+}
+
+
+/* =========================================================
+   PARTICLES ALONG A SEGMENT
+========================================================= */
+
+function createSegmentPoints(
+    segment
+) {
+
+    const points = [];
+
+
+    for (
+        let i = 0;
+        i < PARTICLES_PER_SEGMENT;
+        i++
+    ) {
+
+        const t =
+            i /
+            (
+                PARTICLES_PER_SEGMENT - 1
+            );
+
+
+        /*
+            Tiny jitter.
+
+            NOT enough to break the line.
+        */
+
+        const jitter =
+            0.45;
+
+
+        points.push({
+
+            x:
+                segment.x1 +
+                (
+                    segment.x2 -
+                    segment.x1
+                ) *
+                t
+                +
+                (
+                    Math.random() -
+                    0.5
+                ) *
+                jitter,
+
+            y:
+                segment.y1 +
+                (
+                    segment.y2 -
+                    segment.y1
+                ) *
+                t
+                +
+                (
+                    Math.random() -
+                    0.5
+                ) *
+                jitter
+        });
+    }
+
+
+    return points;
+}
+
+
+/* =========================================================
+   DIGIT TARGETS
+========================================================= */
+
+function makeDigitTargets(
+    digit,
+    index,
+    layout
+) {
+
+    const x =
+        getCharacterX(
+            index,
+            layout
+        );
+
+
+    const activeSegments =
+        DIGITS[digit];
+
+
+    const points = [];
+
+
+    /*
+        Every active segment receives
+        a complete chain of particles.
+    */
+
+    for (
+        const segmentName
+        of activeSegments
+    ) {
+
+        const segment =
+            getSegment(
+                segmentName,
+                x,
+                layout
+            );
+
+
+        const segmentPoints =
+            createSegmentPoints(
+                segment
+            );
+
+
+        points.push(
+            ...segmentPoints
+        );
+    }
+
+
+    return points;
+}
+
+
+/* =========================================================
+   COLON
+========================================================= */
+
+function makeColonTargets(
+    index,
+    layout
+) {
+
+    const x =
+        getCharacterX(
+            index,
+            layout
+        );
+
+
+    const centerX =
+        x +
+        layout.colonWidth / 2;
+
+
+    const centerY =
+        H / 2;
+
+
+    const offset =
+        layout.digitHeight *
+        0.18;
+
+
+    const points = [];
+
+
+    for (
+        let dot = 0;
+        dot < 2;
+        dot++
+    ) {
+
+        const cy =
+            centerY +
+            (
+                dot === 0
+                    ? -offset
+                    : offset
+            );
+
+
+        /*
+            10 particles per colon dot.
+        */
+
+        for (
+            let i = 0;
+            i < 10;
+            i++
+        ) {
+
+            const angle =
+                Math.random() *
+                Math.PI *
+                2;
+
+            const radius =
+                Math.sqrt(
+                    Math.random()
+                ) *
+                layout.scale *
+                0.20;
+
+
+            points.push({
+
+                x:
+                    centerX +
+                    Math.cos(angle) *
+                    radius,
+
+                y:
+                    cy +
+                    Math.sin(angle) *
+                    radius
+            });
+        }
+    }
+
+
+    return points;
+}
+
+
+/* =========================================================
+   MAKE CHARACTER TARGETS
+========================================================= */
+
+function makeTargets(
+    character,
+    index,
+    layout
+) {
+
+    if (
+        character === ":"
+    ) {
+
+        return makeColonTargets(
+            index,
+            layout
+        );
+    }
+
+
+    return makeDigitTargets(
+        character,
+        index,
+        layout
+    );
+}
+
+
+/* =========================================================
+   INITIALIZE
+========================================================= */
+
+function initializeClock(
+    text
+) {
+
+    const layout =
+        getLayout();
+
+
+    groups = [];
+
+
+    for (
+        let index = 0;
+        index < 8;
+        index++
+    ) {
+
+        const targets =
+            makeTargets(
+                text[index],
+                index,
+                layout
+            );
+
+
+        const group = [];
+
+
+        for (
+            const target
+            of targets
+        ) {
+
+            const particle =
+                new Particle(
+                    target.x,
+                    target.y
+                );
+
+
+            particle.setTarget(
+                target.x,
+                target.y,
+                false
+            );
+
+
+            group.push(
+                particle
+            );
+        }
+
+
+        groups.push(
+            group
+        );
+    }
+}
+
+
+/* =========================================================
+   UPDATE ONE CHARACTER
+========================================================= */
+
+function updateCharacter(
+    index,
+    character
+) {
+
+    const layout =
+        getLayout();
+
+
+    const targets =
+        makeTargets(
+            character,
+            index,
+            layout
+        );
+
+
+    const group =
+        groups[index];
+
+
+    /*
+        Number of particles can change
+        between digits because 1 has 2
+        segments while 8 has 7.
+
+        Rebuild ONLY this character's
+        particle group.
+
+        Everything else remains untouched.
+    */
+
+    const newGroup = [];
+
+
+    for (
+        const target
+        of targets
+    ) {
+
+        /*
+            Try to reuse an existing particle
+            when possible.
+        */
+
+        const particle =
+            group[newGroup.length];
+
+
+        if (particle) {
+
+            particle.setTarget(
+                target.x,
+                target.y,
+                true
+            );
+
+            newGroup.push(
+                particle
+            );
+
+        } else {
+
+            /*
+                New particles start slightly
+                outside the destination and
+                fly into position.
+            */
+
+            const p =
+                new Particle(
+                    target.x,
+                    target.y
+                );
+
+
+            p.x +=
+                (
+                    Math.random() -
+                    0.5
+                ) * 20;
+
+            p.y +=
+                (
+                    Math.random() -
+                    0.5
+                ) * 20;
+
+
+            p.setTarget(
+                target.x,
+                target.y,
+                true
+            );
+
+
+            newGroup.push(p);
+        }
+    }
+
+
+    groups[index] =
+        newGroup;
+}
+
+
+/* =========================================================
+   BACKGROUND
+========================================================= */
+
+let stars = [];
+
+
+function createStars() {
+
+    stars = [];
+
+
+    for (
+        let i = 0;
+        i < 130;
+        i++
+    ) {
+
+        stars.push({
+
+            x:
+                Math.random() * W,
+
+            y:
+                Math.random() * H,
+
+            radius:
+                Math.random() *
+                0.6 +
+                0.15,
+
+            alpha:
+                Math.random() *
+                0.12 +
+                0.02
+        });
+    }
+}
+
+
+function drawStars() {
+
+    for (
+        const star
+        of stars
+    ) {
+
+        ctx.beginPath();
+
+        ctx.arc(
+            star.x,
+            star.y,
+            star.radius,
+            0,
+            Math.PI * 2
+        );
+
+
+        ctx.fillStyle =
+            `rgba(170,200,220,${star.alpha})`;
+
+        ctx.fill();
+    }
+}
+
+
+/* =========================================================
+   DRAW SEGMENT CONNECTIONS
+========================================================= */
+
+function drawConnections() {
+
+    const [
+        r,
+        g,
+        b
+    ] =
+        activeColor.main;
+
+
+    /*
+        Very subtle lines.
+
+        They make a segment continuous
+        without turning the clock into
+        ordinary digital text.
+    */
+
+    ctx.strokeStyle =
+        `rgba(${r},${g},${b},${LINE_ALPHA})`;
+
+    ctx.lineWidth = 1;
+
+    ctx.lineCap = "round";
+
+
+    for (
+        const group
+        of groups
+    ) {
+
+        /*
+            Connect nearby particles.
+
+            Because each segment's particles
+            are stored sequentially, particles
+            within a segment naturally form
+            a line.
+        */
+
+        for (
+            let i = 0;
+            i < group.length - 1;
+            i++
+        ) {
+
+            const a =
+                group[i];
+
+            const bPoint =
+                group[i + 1];
+
+
+            const dx =
+                bPoint.x -
+                a.x;
+
+            const dy =
+                bPoint.y -
+                a.y;
+
+
+            const distance =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+
+
+            /*
+                Only connect nearby particles.
+
+                This prevents a line being drawn
+                between the end of one segment and
+                the beginning of another.
+            */
+
+            if (
+                distance <
+                getLayout().scale * 0.8
+            ) {
+
+                ctx.beginPath();
+
+                ctx.moveTo(
+                    a.x,
+                    a.y
+                );
+
+                ctx.lineTo(
+                    bPoint.x,
+                    bPoint.y
+                );
+
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+
+/* =========================================================
+   DRAW PARTICLES
+========================================================= */
+
+function drawParticles() {
+
+    const [
+        r,
+        g,
+        b
+    ] =
+        activeColor.main;
+
+
+    ctx.shadowBlur =
+        8;
+
+    ctx.shadowColor =
+        `rgba(
+            ${activeColor.glow[0]},
+            ${activeColor.glow[1]},
+            ${activeColor.glow[2]},
+            0.75
+        )`;
+
+
+    for (
+        const group
+        of groups
+    ) {
+
+        for (
+            const particle
+            of group
+        ) {
+
+            ctx.beginPath();
+
+            ctx.arc(
+                particle.x,
+                particle.y,
+                DOT_SIZE,
+                0,
+                Math.PI * 2
+            );
+
+
+            ctx.fillStyle =
+                `rgba(${r},${g},${b},0.92)`;
+
+            ctx.fill();
+        }
+    }
+
+
+    ctx.shadowBlur = 0;
+}
+
+
+/* =========================================================
+   RESIZE
+========================================================= */
+
+function resize() {
+
+    DPR =
+        Math.min(
+            window.devicePixelRatio || 1,
+            2
+        );
+
+
+    W =
+        window.innerWidth;
+
+    H =
+        window.innerHeight;
+
+
+    canvas.width =
+        W * DPR;
+
+    canvas.height =
+        H * DPR;
+
+
+    canvas.style.width =
+        W + "px";
+
+    canvas.style.height =
+        H + "px";
+
+
+    ctx.setTransform(
+        DPR,
+        0,
+        0,
+        DPR,
+        0,
+        0
+    );
+
+
+    createStars();
+
+
+    if (
+        currentTime
+    ) {
+
+        initializeClock(
+            currentTime
+        );
+    }
+}
+
+
+window.addEventListener(
+    "resize",
+    resize
+);
+
+
+/* =========================================================
+   TIME
+========================================================= */
+
+function getTime() {
+
+    const now =
+        new Date();
+
+
+    return (
+
+        String(
+            now.getHours()
+        ).padStart(2, "0")
+
+        +
+
+        ":"
+
+        +
+
+        String(
+            now.getMinutes()
+        ).padStart(2, "0")
+
+        +
+
+        ":"
+
+        +
+
+        String(
+            now.getSeconds()
+        ).padStart(2, "0")
+    );
+}
+
+
+/* =========================================================
+   MAIN LOOP
+========================================================= */
+
+let currentTime = "";
+
+
+function animate() {
+
+    /*
+        Background.
+    */
+
+    ctx.fillStyle =
+        "#030508";
+
+    ctx.fillRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+
+    drawStars();
+
+
+    const newTime =
+        getTime();
+
+
+    /*
+        First frame.
+    */
+
+    if (
+        currentTime === ""
+    ) {
+
+        currentTime =
+            newTime;
+
+        initializeClock(
+            currentTime
+        );
+    }
+
+
+    /*
+        Compare every character.
+
+        Only changed characters are rebuilt.
+    */
+
+    if (
+        newTime !==
+        currentTime
+    ) {
+
+        for (
+            let i = 0;
+            i < 8;
+            i++
+        ) {
+
+            if (
+                newTime[i] !==
+                currentTime[i]
+            ) {
+
+                updateCharacter(
+                    i,
+                    newTime[i]
+                );
+            }
+        }
+
+
+        currentTime =
+            newTime;
+    }
+
+
+    /*
+        Physics.
+    */
+
+    for (
+        const group
+        of groups
+    ) {
+
+        for (
+            const particle
+            of group
+        ) {
+
+            particle.update();
+        }
+    }
+
+
+    /*
+        Faint continuous segment structure.
+    */
+
+    drawConnections();
+
+
+    /*
+        Particle layer.
+    */
+
+    drawParticles();
+
+
+    requestAnimationFrame(
+        animate
+    );
+}
+
+
+/* =========================================================
+   START
+========================================================= */
+
+resize();
+
+currentTime =
+    getTime();
+
+initializeClock(
+    currentTime
+);
+
+requestAnimationFrame(
+    animate
+);
+
+</script>
+
+</body>
+</html>
